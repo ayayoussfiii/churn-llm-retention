@@ -99,4 +99,4 @@ streamlit run dashboard/app.py
 
 ---
 
-📍 Built with Python + Anthropic Claude API
+📍 Built with Python 
