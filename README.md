@@ -94,7 +94,7 @@ streamlit run dashboard/app.py
 
 - **ML Prediction** — XGBoost trained on 12 customer features
 - **Explainability** — SHAP values highlight top churn drivers per customer
-- **LLM Retention** — Claude generates personalized 90-day retention plans
+- **LLM Retention** —  generates personalized 90-day retention plans
 - **Interactive Dashboard** — Real-time risk gauge, SHAP charts, dataset overview
 
 ---
