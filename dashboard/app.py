@@ -1,10 +1,27 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import pickle
 import pandas as pd
-import sys, os
+import sys
+import os
+import logging
+import csv
+import io
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+TOP_SHAP_FEATURES = 6
+CHURN_HIGH_THRESHOLD = 0.7
+CHURN_MEDIUM_THRESHOLD = 0.4
+
+# ── Model loading ─────────────────────────────────────────────────────────────
 def load_model():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(base, "models/xgb_churn.pkl"), "rb") as f:
@@ -15,6 +32,16 @@ def load_model():
 
 model, feature_cols = load_model()
 
+# ── SHAP explainer cache (created once at startup, not on every request) ──────
+shap_explainer = None
+try:
+    import shap
+    shap_explainer = shap.TreeExplainer(model)
+    logger.info("SHAP explainer loaded successfully.")
+except Exception as e:
+    logger.warning(f"SHAP not available: {e}")
+
+# ── Feature mappings ──────────────────────────────────────────────────────────
 MAPS = {
     "gender":           {"Female": 0, "Male": 1},
     "partner":          {"No": 0, "Yes": 1},
@@ -34,11 +61,36 @@ MAPS = {
         "Bank transfer (automatic)": 0,
         "Credit card (automatic)": 1,
         "Electronic check": 2,
-        "Mailed check": 3
+        "Mailed check": 3,
     },
 }
 
-def preprocess(raw):
+REQUIRED_NUMERIC = {"tenure", "monthlycharges", "totalcharges", "seniorcitizen"}
+
+
+def validate_input(raw: dict) -> list[str]:
+    """Return a list of validation error messages (empty = valid)."""
+    errors = []
+    for field in REQUIRED_NUMERIC:
+        value = raw.get(field)
+        if value is None:
+            errors.append(f"Missing required field: '{field}'")
+            continue
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            errors.append(f"Field '{field}' must be a number, got: {value!r}")
+    for field in MAPS:
+        value = raw.get(field)
+        if value is not None and str(value) not in MAPS[field]:
+            errors.append(
+                f"Invalid value for '{field}': {value!r}. "
+                f"Allowed: {list(MAPS[field].keys())}"
+            )
+    return errors
+
+
+def preprocess(raw: dict) -> pd.DataFrame:
     processed = {}
     for col in feature_cols:
         if col in MAPS:
@@ -48,6 +100,15 @@ def preprocess(raw):
     return pd.DataFrame([processed])
 
 
+def get_risk_level(probability: float) -> str:
+    if probability > CHURN_HIGH_THRESHOLD:
+        return "High"
+    if probability > CHURN_MEDIUM_THRESHOLD:
+        return "Medium"
+    return "Low"
+
+
+# ── HTML (unchanged) ──────────────────────────────────────────────────────────
 HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,6 +136,8 @@ header{background:var(--s);border-bottom:1px solid var(--b);padding:1rem 2rem;di
 .fg input[type=range]{width:100%;accent-color:var(--p);margin-top:.2rem}
 .btn{width:100%;padding:.78rem;background:linear-gradient(135deg,var(--p),var(--pk));border:none;border-radius:10px;color:#fff;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit;margin-top:.5rem;transition:opacity .2s;box-shadow:0 4px 14px rgba(79,70,229,.25)}
 .btn:hover{opacity:.88}
+.btn-export{width:100%;padding:.6rem;background:var(--s2);border:1px solid var(--b);border-radius:10px;color:var(--t);font-size:.82rem;font-weight:500;cursor:pointer;font-family:inherit;margin-top:.4rem;transition:background .2s}
+.btn-export:hover{background:var(--b)}
 .sep{border:none;border-top:1px solid var(--b);margin:.8rem 0}
 .main{padding:1.4rem;overflow-y:auto}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.4rem}
@@ -101,9 +164,11 @@ header{background:var(--s);border-bottom:1px solid var(--b);padding:1rem 2rem;di
 .divider{border:none;border-top:1px solid var(--b);margin:1.4rem 0}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
 .empty{color:var(--m);font-size:.82rem;padding:2rem;text-align:center;background:var(--s2);border-radius:9px}
+.error-toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;padding:.8rem 1.2rem;border-radius:10px;font-size:.82rem;font-weight:500;box-shadow:var(--shadow);display:none;z-index:999}
 </style>
 </head>
 <body>
+<div class="error-toast" id="error-toast"></div>
 <header>
   <div class="logo">🧠 ChurnAI</div>
   <div class="sub">Customer Churn Prediction Dashboard &nbsp;·&nbsp; IBM Telco Dataset (7,043 customers)</div>
@@ -136,6 +201,7 @@ header{background:var(--s);border-bottom:1px solid var(--b);padding:1rem 2rem;di
   <div class="fg"><label>Monthly Charges ($)</label><input type="number" id="monthlycharges" value="65" min="18" max="120" step="1"></div>
   <div class="fg"><label>Total Charges ($)</label><input type="number" id="totalcharges" value="780" min="0" max="9000" step="50"></div>
   <button class="btn" onclick="predict()">⚡ Analyze Customer</button>
+  <button class="btn-export" onclick="exportResult()">📥 Export Result as CSV</button>
 </aside>
 <main class="main">
   <div class="kpis">
@@ -176,8 +242,17 @@ const C={red:'#dc2626',yellow:'#d97706',green:'#16a34a',purple:'#4f46e5',muted:'
 function el(id){return document.getElementById(id)}
 function val(id){return el(id).value}
 
-async function predict(){
-  const data={
+let lastResult = null;
+
+function showError(msg) {
+  const toast = el('error-toast');
+  toast.textContent = '⚠️ ' + msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+}
+
+function getFormData() {
+  return {
     gender:val('gender'),seniorcitizen:parseInt(val('seniorcitizen')),
     partner:val('partner'),dependents:val('dependents'),tenure:parseInt(val('tenure')),
     phoneservice:val('phoneservice'),multiplelines:val('multiplelines'),
@@ -188,36 +263,62 @@ async function predict(){
     paperlessbilling:val('paperlessbilling'),paymentmethod:val('paymentmethod'),
     monthlycharges:parseFloat(val('monthlycharges')),totalcharges:parseFloat(val('totalcharges'))
   };
-  const res=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  const r=await res.json();
-  const color=r.risk==='High'?C.red:r.risk==='Medium'?C.yellow:C.green;
-  const emoji=r.risk==='High'?'🔴':r.risk==='Medium'?'🟡':'🟢';
-  const rc=r.risk==='High'?'rh':r.risk==='Medium'?'rm':'rl';
-  const bg=r.risk==='High'?'#fee2e2':r.risk==='Medium'?'#fef3c7':'#dcfce7';
-  el('prob-val').textContent=r.percentage+'%';el('prob-val').style.color=color;
-  el('risk-val').textContent=r.risk+' '+emoji;el('risk-val').style.color=color;
-  el('kpi-prob').className='kpi '+rc;el('kpi-risk').className='kpi '+rc;
-  const deg=Math.round(r.probability*360);
-  el('gauge-ring').style.background=`conic-gradient(${color} ${deg}deg,#e2e6f0 ${deg}deg)`;
-  el('gauge-pct').textContent=r.percentage+'%';el('gauge-pct').style.color=color;
-  el('risk-badge').textContent=r.risk.toUpperCase()+' RISK '+emoji;
-  el('risk-badge').style.background=bg;el('risk-badge').style.color=color;
-  if(r.shap_factors&&r.shap_factors.length){
-    const mx=Math.max(...r.shap_factors.map(f=>Math.abs(f.shap_value)));
-    el('shap-list').innerHTML=r.shap_factors.map(f=>{
-      const w=Math.round((Math.abs(f.shap_value)/mx)*100);
-      const c=f.impact==='increases'?C.red:C.green;
-      return `<div class="shap-item"><div class="shap-name">${f.feature}</div><div class="shap-bar-bg"><div class="shap-bar" style="width:${w}%;background:${c}"></div></div><div class="shap-val" style="color:${c}">${f.shap_value>0?'+':''}${f.shap_value.toFixed(3)}</div></div>`;
-    }).join('');
+}
+
+async function predict(){
+  const data = getFormData();
+  try {
+    const res = await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const r = await res.json();
+    if (!res.ok) { showError(r.error || 'Prediction failed'); return; }
+    lastResult = { ...data, ...r };
+    const color=r.risk==='High'?C.red:r.risk==='Medium'?C.yellow:C.green;
+    const emoji=r.risk==='High'?'🔴':r.risk==='Medium'?'🟡':'🟢';
+    const rc=r.risk==='High'?'rh':r.risk==='Medium'?'rm':'rl';
+    const bg=r.risk==='High'?'#fee2e2':r.risk==='Medium'?'#fef3c7':'#dcfce7';
+    el('prob-val').textContent=r.percentage+'%';el('prob-val').style.color=color;
+    el('risk-val').textContent=r.risk+' '+emoji;el('risk-val').style.color=color;
+    el('kpi-prob').className='kpi '+rc;el('kpi-risk').className='kpi '+rc;
+    const deg=Math.round(r.probability*360);
+    el('gauge-ring').style.background=`conic-gradient(${color} ${deg}deg,#e2e6f0 ${deg}deg)`;
+    el('gauge-pct').textContent=r.percentage+'%';el('gauge-pct').style.color=color;
+    el('risk-badge').textContent=r.risk.toUpperCase()+' RISK '+emoji;
+    el('risk-badge').style.background=bg;el('risk-badge').style.color=color;
+    if(r.shap_factors&&r.shap_factors.length){
+      const mx=Math.max(...r.shap_factors.map(f=>Math.abs(f.shap_value)));
+      el('shap-list').innerHTML=r.shap_factors.map(f=>{
+        const w=Math.round((Math.abs(f.shap_value)/mx)*100);
+        const c=f.impact==='increases'?C.red:C.green;
+        return `<div class="shap-item"><div class="shap-name">${f.feature}</div><div class="shap-bar-bg"><div class="shap-bar" style="width:${w}%;background:${c}"></div></div><div class="shap-val" style="color:${c}">${f.shap_value>0?'+':''}${f.shap_value.toFixed(3)}</div></div>`;
+      }).join('');
+    }
+  } catch(e) {
+    showError('Network error — is the server running?');
   }
 }
 
+function exportResult() {
+  if (!lastResult) { showError('Run an analysis first before exporting.'); return; }
+  const res = await fetch('/export', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(lastResult)
+  });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'churn_result.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function loadStats(){
-  const res=await fetch('/dataset-stats');const d=await res.json();if(d.error)return;
-  const base={responsive:true,plugins:{legend:{labels:{color:'#1a1d2e',font:{family:'Inter',size:11}}}},scales:{x:{ticks:{color:C.muted},grid:{color:'#e2e6f0'}},y:{ticks:{color:C.muted},grid:{color:'#e2e6f0'}}}};
-  new Chart(el('pieChart'),{type:'doughnut',data:{labels:['Retained','Churned'],datasets:[{data:[100-d.churn_rate,d.churn_rate],backgroundColor:[C.green,C.red],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,cutout:'60%',plugins:{legend:{labels:{color:'#1a1d2e',font:{family:'Inter',size:11}}}}}});
-  new Chart(el('contractChart'),{type:'bar',data:{labels:Object.keys(d.contract_churn),datasets:[{label:'Churn %',data:Object.values(d.contract_churn).map(v=>Math.round(v*100)),backgroundColor:[C.red,C.yellow,C.green],borderRadius:6,borderSkipped:false}]},options:{...base,plugins:{legend:{display:false}}}});
-  new Chart(el('tenureChart'),{type:'line',data:{labels:Object.keys(d.tenure_churn),datasets:[{label:'Churn %',data:Object.values(d.tenure_churn).map(v=>Math.round(v*100)),borderColor:C.purple,backgroundColor:'rgba(79,70,229,0.08)',fill:true,tension:0.4,pointBackgroundColor:C.purple,pointRadius:4}]},options:base});
+  try {
+    const res=await fetch('/dataset-stats');const d=await res.json();if(d.error)return;
+    const base={responsive:true,plugins:{legend:{labels:{color:'#1a1d2e',font:{family:'Inter',size:11}}}},scales:{x:{ticks:{color:C.muted},grid:{color:'#e2e6f0'}},y:{ticks:{color:C.muted},grid:{color:'#e2e6f0'}}}};
+    new Chart(el('pieChart'),{type:'doughnut',data:{labels:['Retained','Churned'],datasets:[{data:[100-d.churn_rate,d.churn_rate],backgroundColor:[C.green,C.red],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,cutout:'60%',plugins:{legend:{labels:{color:'#1a1d2e',font:{family:'Inter',size:11}}}}}});
+    new Chart(el('contractChart'),{type:'bar',data:{labels:Object.keys(d.contract_churn),datasets:[{label:'Churn %',data:Object.values(d.contract_churn).map(v=>Math.round(v*100)),backgroundColor:[C.red,C.yellow,C.green],borderRadius:6,borderSkipped:false}]},options:{...base,plugins:{legend:{display:false}}}});
+    new Chart(el('tenureChart'),{type:'line',data:{labels:Object.keys(d.tenure_churn),datasets:[{label:'Churn %',data:Object.values(d.tenure_churn).map(v=>Math.round(v*100)),borderColor:C.purple,backgroundColor:'rgba(79,70,229,0.08)',fill:true,tension:0.4,pointBackgroundColor:C.purple,pointRadius:4}]},options:base});
+  } catch(e) { console.warn('Could not load dataset stats:', e); }
 }
 loadStats();predict();
 </script>
@@ -225,29 +326,77 @@ loadStats();predict();
 </html>"""
 
 
+# ── Routes ────────────────────────────────────────────────────────────────────
+
 @app.route("/")
 def index():
     return HTML
 
 
+@app.route("/health")
+def health():
+    """Health check endpoint — useful for deployment monitoring."""
+    return jsonify({"status": "ok", "model_loaded": model is not None})
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.json
-    df_input = preprocess(data)
-    prob = float(model.predict_proba(df_input)[0][1])
-    risk = "High" if prob > 0.7 else "Medium" if prob > 0.4 else "Low"
-    shap_factors = []
+    if not data:
+        return jsonify({"error": "Request body must be JSON."}), 400
+
+    errors = validate_input(data)
+    if errors:
+        logger.warning(f"Invalid predict input: {errors}")
+        return jsonify({"error": "; ".join(errors)}), 422
+
     try:
-        import shap
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(df_input)
-        for f, v in zip(feature_cols, shap_values[0]):
-            shap_factors.append({"feature": f.replace("_"," ").title(),"shap_value": round(float(v),4),"impact":"increases" if v>0 else "decreases"})
-        shap_factors.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
-        shap_factors = shap_factors[:6]
-    except:
-        pass
-    return jsonify({"probability": round(prob,4),"percentage": round(prob*100,1),"risk": risk,"shap_factors": shap_factors})
+        df_input = preprocess(data)
+        prob = float(model.predict_proba(df_input)[0][1])
+        risk = get_risk_level(prob)
+
+        shap_factors = []
+        if shap_explainer is not None:
+            shap_values = shap_explainer.shap_values(df_input)
+            for f, v in zip(feature_cols, shap_values[0]):
+                shap_factors.append({
+                    "feature": f.replace("_", " ").title(),
+                    "shap_value": round(float(v), 4),
+                    "impact": "increases" if v > 0 else "decreases",
+                })
+            shap_factors.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
+            shap_factors = shap_factors[:TOP_SHAP_FEATURES]
+
+        logger.info(f"Prediction: prob={prob:.3f}, risk={risk}")
+        return jsonify({
+            "probability": round(prob, 4),
+            "percentage": round(prob * 100, 1),
+            "risk": risk,
+            "shap_factors": shap_factors,
+        })
+
+    except Exception as e:
+        logger.error(f"Prediction error: {e}", exc_info=True)
+        return jsonify({"error": "Internal prediction error."}), 500
+
+
+@app.route("/export", methods=["POST"])
+def export():
+    """Export a single prediction result as a downloadable CSV."""
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided."}), 400
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=data.keys())
+    writer.writeheader()
+    writer.writerow(data)
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=churn_result.csv"},
+    )
 
 
 @app.route("/dataset-stats")
@@ -257,12 +406,23 @@ def dataset_stats():
         df = pd.read_csv(os.path.join(base, "data/churn_dataset.csv"))
         if df["churn"].dtype == object:
             df["churn"] = (df["churn"] == "Yes").astype(int)
-        churn_rate = round(float(df["churn"].mean())*100,1)
-        tenure_bins = pd.cut(df["tenure"],bins=[0,12,24,36,48,60,72],labels=["0-12","13-24","25-36","37-48","49-60","61-72"])
-        tenure_churn = df.groupby(tenure_bins,observed=True)["churn"].mean().round(3).to_dict()
+        churn_rate = round(float(df["churn"].mean()) * 100, 1)
+        tenure_bins = pd.cut(
+            df["tenure"],
+            bins=[0, 12, 24, 36, 48, 60, 72],
+            labels=["0-12", "13-24", "25-36", "37-48", "49-60", "61-72"],
+        )
+        tenure_churn = df.groupby(tenure_bins, observed=True)["churn"].mean().round(3).to_dict()
         contract_churn = df.groupby("contract")["churn"].mean().round(3).to_dict()
-        return jsonify({"total":len(df),"churned":int(df["churn"].sum()),"churn_rate":churn_rate,"tenure_churn":{str(k):float(v) for k,v in tenure_churn.items()},"contract_churn":{str(k):float(v) for k,v in contract_churn.items()}})
+        return jsonify({
+            "total": len(df),
+            "churned": int(df["churn"].sum()),
+            "churn_rate": churn_rate,
+            "tenure_churn": {str(k): float(v) for k, v in tenure_churn.items()},
+            "contract_churn": {str(k): float(v) for k, v in contract_churn.items()},
+        })
     except Exception as e:
+        logger.error(f"Dataset stats error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
