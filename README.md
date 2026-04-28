@@ -1,4 +1,4 @@
-# 🧠 ChurnAI — Customer Churn Prediction + LLM Retention Strategy
+#  ChurnAI — Customer Churn Prediction + LLM Retention Strategy
 
 > An end-to-end AI system that predicts customer churn with XGBoost, explains predictions with SHAP, and automatically generates personalized retention strategies using Claude (Anthropic).
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 📌 Overview
+##  Overview
 
 ChurnAI helps telecom companies identify customers at risk of churning **before** they leave. It combines:
 
@@ -21,7 +21,7 @@ ChurnAI helps telecom companies identify customers at risk of churning **before*
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
@@ -61,7 +61,7 @@ ChurnAI helps telecom companies identify customers at risk of churning **before*
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 churn-llm-retention/
@@ -84,7 +84,7 @@ churn-llm-retention/
 
 ---
 
-## ⚙️ Setup
+##  Setup
 
 ### Prerequisites
 
@@ -113,7 +113,7 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 ---
 
-## 🚀 Run
+##  Run
 
 ```bash
 # 1. Generate synthetic dataset
@@ -130,7 +130,7 @@ The dashboard will open at `http://localhost:8501`.
 
 ---
 
-## 📊 Model Performance
+##  Model Performance
 
 Evaluated on a held-out test set (20% split):
 
@@ -146,7 +146,7 @@ Evaluated on a held-out test set (20% split):
 
 ---
 
-## ✨ Features
+##  Features
 
 - **ML Prediction** — XGBoost trained on 12 customer features with probability calibration
 - **Explainability** — SHAP values highlight the top risk drivers per individual customer
