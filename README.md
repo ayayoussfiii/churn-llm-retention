@@ -167,17 +167,6 @@ Evaluated on a held-out test set (20% split):
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
