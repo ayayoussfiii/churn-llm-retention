@@ -64,8 +64,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 
-# Set your Anthropic API key
-export ANTHROPIC_API_KEY=your_key_here  # Windows: set ANTHROPIC_API_KEY=your_key
+
 ```
 
 ## Run
