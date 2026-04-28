@@ -4,8 +4,6 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![XGBoost](https://img.shields.io/badge/XGBoost-2.0%2B-orange)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.x-red?logo=streamlit)
-![Anthropic](https://img.shields.io/badge/Claude-Anthropic-blueviolet)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -48,7 +46,7 @@ ChurnAI helps telecom companies identify customers at risk of churning **before*
 
 ---
 
-## 🛠️ Stack
+##  Stack
 
 | Layer | Technology |
 |---|---|
@@ -89,7 +87,7 @@ churn-llm-retention/
 ### Prerequisites
 
 - Python 3.10+
-- An [Anthropic API key](https://console.anthropic.com/)
+
 
 ### Installation
 
