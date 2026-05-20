@@ -152,7 +152,7 @@ Evaluated on a held-out test set (20% split):
 
 ---
 
-## 🗺️ Roadmap
+##  Roadmap
 
 - [ ] Add batch CSV prediction (upload multiple customers at once)
 - [ ] Export retention strategy as PDF
