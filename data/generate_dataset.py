@@ -18,8 +18,4 @@ df.to_csv("data/churn_dataset.csv", index=False)
 print(f"Dataset saved: {len(df)} rows, {df['churn'].mean():.1%} churn rate")
 print(df.head())
 
-# La dataset Telco — ce qu'elle contient :
 
-# ~7000 clients d'une entreprise télécom
-Features : contrat, internet, ancienneté, charges mensuelles...
-Target : Churn (parti ou pas)#
