@@ -2,9 +2,6 @@
 
 > An end-to-end AI system that predicts customer churn with XGBoost, explains predictions with SHAP, and automatically generates personalized retention strategies using Claude (Anthropic).
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![XGBoost](https://img.shields.io/badge/XGBoost-2.0%2B-orange)
-![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
