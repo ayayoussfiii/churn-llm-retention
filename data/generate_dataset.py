@@ -17,3 +17,9 @@ df["totalcharges"] = pd.to_numeric(df["totalcharges"], errors="coerce").fillna(0
 df.to_csv("data/churn_dataset.csv", index=False)
 print(f"Dataset saved: {len(df)} rows, {df['churn'].mean():.1%} churn rate")
 print(df.head())
+
+# Le dataset Telco — ce qu'il contient :
+
+~7000 clients d'une entreprise télécom
+Features : contrat, internet, ancienneté, charges mensuelles...
+Target : Churn (parti ou pas)
