@@ -1,3 +1,5 @@
+# J'ai utilisé le dataset Telco Customer Churn de Kaggle, un dataset réel de télécommunications avec 7000 clients. J'ai fait un preprocessing : nettoyage des noms de colonnes, encodage de la variable cible en binaire, et gestion des valeurs manquantes dans TotalCharges.
+
 import kagglehub
 from kagglehub import KaggleDatasetAdapter
 import pandas as pd
