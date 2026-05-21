@@ -93,7 +93,8 @@ git clone https://github.com/ayayoussfiii/churn-llm-retention.git
 cd churn-llm-retention
 
 python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+source venv/bin/activate ( MACOS)
+ venv\Scripts\activate
 
 pip install -r requirements.txt
 ```
