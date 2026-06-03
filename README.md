@@ -149,4 +149,4 @@ The dashboard will open at `http://localhost:8501`.
 
 ---
 
-Built with Python · Powered by XGBoost + Claude (Anthropic)
+Built with Python · Powered by XGBoost 
