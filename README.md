@@ -4,7 +4,6 @@
 <img src="https://img.shields.io/badge/XGBoost-2.0+-AA0000?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/SHAP-Explainability-00A67E?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/Claude-Anthropic-D4A27A?style=for-the-badge"/>
-<img src="https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white"/>
 <img src="https://img.shields.io/badge/ROC--AUC-0.91-brightgreen?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge"/>
 
