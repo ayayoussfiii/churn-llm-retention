@@ -5,7 +5,7 @@
 <img src="https://img.shields.io/badge/SHAP-Explainability-00A67E?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/Claude-Anthropic-D4A27A?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/ROC--AUC-0.91-brightgreen?style=for-the-badge"/>
-<img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge"/>
+
 
 # ChurnAI
 
