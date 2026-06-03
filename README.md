@@ -1,4 +1,4 @@
-# ChurnAI — Customer Churn Prediction + LLM Retention Strategy
+# ChurnAI — Customer Churn Prediction +
 
 > End-to-end AI system that predicts customer churn with XGBoost, explains predictions with SHAP, and automatically generates personalized retention strategies using Claude (Anthropic).
 
