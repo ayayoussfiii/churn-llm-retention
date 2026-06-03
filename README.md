@@ -1,11 +1,17 @@
-#  ChurnAI — Customer Churn Prediction + LLM Retention Strategy
+# ChurnAI — Customer Churn Prediction + LLM Retention Strategy
 
-> An end-to-end AI system that predicts customer churn with XGBoost, explains predictions with SHAP, and automatically generates personalized retention strategies using Anthropic.
+> End-to-end AI system that predicts customer churn with XGBoost, explains predictions with SHAP, and automatically generates personalized retention strategies using Claude (Anthropic).
 
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)
+![XGBoost](https://img.shields.io/badge/XGBoost-2.0+-AA0000?style=flat)
+![SHAP](https://img.shields.io/badge/Explainability-SHAP-00A67E?style=flat)
+![Claude](https://img.shields.io/badge/LLM-Claude%20API-D4A27A?style=flat)
+![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)
+![ROC-AUC](https://img.shields.io/badge/ROC--AUC-0.91-success?style=flat)
 
 ---
 
-##  Overview
+## Overview
 
 ChurnAI helps telecom companies identify customers at risk of churning **before** they leave. It combines:
 
@@ -16,38 +22,20 @@ ChurnAI helps telecom companies identify customers at risk of churning **before*
 
 ---
 
-##  Architecture
+## Pipeline
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│  Customer Data  │───▶│  XGBoost Model   │───▶│  Churn Probability  │
-│  (CSV / Form)   │    │  (trained ML)    │    │  + Risk Level       │
-└─────────────────┘    └──────────────────┘    └──────────┬──────────┘
-                                                           │
-                                               ┌───────────▼───────────┐
-                                               │   SHAP Explainability │
-                                               │   (Top risk factors)  │
-                                               └───────────┬───────────┘
-                                                           │
-                                               ┌───────────▼───────────┐
-                                               │  Claude LLM (Anthropic)│
-                                               │  Retention Strategy    │
-                                               │  Generator             │
-                                               └───────────┬───────────┘
-                                                           │
-                                               ┌───────────▼───────────┐
-                                               │  Streamlit Dashboard  │
-                                               │  (Interactive UI)     │
-                                               └───────────────────────┘
+Customer Data → XGBoost Model → SHAP Explainability → Claude LLM → Streamlit Dashboard
+(CSV / Form)    (Churn score)    (Top risk factors)   (90-day plan)  (Interactive UI)
 ```
 
 ---
 
-##  Stack
+## Stack
 
 | Layer | Technology |
 |---|---|
-| ML Model | `XGBoost 2.0+` |
+| ML model | `XGBoost 2.0+` |
 | Explainability | `SHAP` |
 | LLM | `Anthropic Claude` via API |
 | Dashboard | `Streamlit` + `Plotly` |
@@ -56,7 +44,32 @@ ChurnAI helps telecom companies identify customers at risk of churning **before*
 
 ---
 
-##  Project Structure
+## Model Performance
+
+Evaluated on a held-out test set (20% split), trained on 12 features including tenure, contract type, monthly charges, internet service, and payment method.
+
+| Metric | Score |
+|---|---|
+| ROC-AUC | ~0.91 |
+| Precision (Churn) | ~0.84 |
+| Recall (Churn) | ~0.79 |
+| F1-Score (Churn) | ~0.81 |
+| Accuracy | ~0.83 |
+
+---
+
+## Key Features
+
+- **ML prediction** — XGBoost trained on 12 customer features with probability calibration
+- **SHAP explainability** — top risk drivers per individual customer, visualized as bar charts
+- **LLM retention plans** — Claude generates personalized 90-day retention action plans
+- **Interactive dashboard** — real-time risk gauge, SHAP bar charts, dataset overview
+- **Risk segmentation** — customers classified as Low / Medium / High churn risk
+- **Dataset analytics** — churn rate by contract type, tenure group, and payment method
+
+---
+
+## Project Structure
 
 ```
 churn-llm-retention/
@@ -79,12 +92,12 @@ churn-llm-retention/
 
 ---
 
-##  Setup
+## Setup
 
 ### Prerequisites
 
 - Python 3.10+
-
+- An [Anthropic API key](https://console.anthropic.com/)
 
 ### Installation
 
@@ -93,15 +106,15 @@ git clone https://github.com/ayayoussfiii/churn-llm-retention.git
 cd churn-llm-retention
 
 python -m venv venv
-source venv/bin/activate ( MACOS)
- venv\Scripts\activate
+source venv/bin/activate        # macOS / Linux
+venv\Scripts\activate           # Windows
 
 pip install -r requirements.txt
 ```
 
-### Environment Variables
+### Environment variables
 
-Create a `.env` file at the root:
+Create a `.env` file at the root of the project:
 
 ```env
 ANTHROPIC_API_KEY=your_api_key_here
@@ -109,7 +122,7 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 ---
 
-##  Run
+## Quickstart
 
 ```bash
 # 1. Generate synthetic dataset
@@ -126,44 +139,14 @@ The dashboard will open at `http://localhost:8501`.
 
 ---
 
-##  Model Performance
+## Roadmap
 
-Evaluated on a held-out test set (20% split):
-
-| Metric | Score |
-|---|---|
-| ROC-AUC | ~0.91 |
-| Precision (Churn) | ~0.84 |
-| Recall (Churn) | ~0.79 |
-| F1-Score (Churn) | ~0.81 |
-| Accuracy | ~0.83 |
-
-> Model trained on 12 features including tenure, contract type, monthly charges, internet service, and payment method.
-
----
-
-##  Features
-
-- **ML Prediction** — XGBoost trained on 12 customer features with probability calibration
-- **Explainability** — SHAP values highlight the top risk drivers per individual customer
-- **LLM Retention** — Claude generates personalized 90-day retention action plans
-- **Interactive Dashboard** — Real-time risk gauge, SHAP bar charts, dataset overview
-- **Risk Segmentation** — Customers classified as Low / Medium / High churn risk
-- **Dataset Analytics** — Churn rate by contract type, tenure group, and payment method
-
----
-
-##  Roadmap
-
-- [ ] Add batch CSV prediction (upload multiple customers at once)
-- [ ] Export retention strategy as PDF
-- [ ] Add model retraining pipeline
+- [ ] Batch CSV prediction — upload multiple customers at once
+- [ ] Export retention strategies as PDF
+- [ ] Model retraining pipeline
 - [ ] REST API with FastAPI
 - [ ] Docker support
 
 ---
 
-
----
-
-📍 Built with Python · Powered by XGBoost + Claude (Anthropic)
+Built with Python · Powered by XGBoost + Claude (Anthropic)
